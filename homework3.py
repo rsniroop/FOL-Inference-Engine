@@ -6,6 +6,7 @@ NEGATION = "~"
 
 args_seen_list = set()
 count = 0
+
 def is_variable(arg):
 
     return isinstance(arg, str) and arg[:1].isalpha() and arg[:1].islower()
@@ -34,6 +35,9 @@ class Predicate:
 
         self.parse_literal(literal)
         #self.standardize()
+
+    def __invert__(self):
+        self.is_negation = not self.is_negation
 
     def parse_literal(self, literal):
 
@@ -77,10 +81,7 @@ class Sentence:
         # Eliminate Implication
         if self.is_implication:
             for idx in range(len(self.predicates) -1):
-                if self.predicates[idx].is_negation == True:
-                    self.predicates[idx].is_negation = False
-                else:
-                    self.predicates[idx].is_negation = True
+                ~self.predicates[idx]
 
         #distribute and over or??
 
@@ -125,13 +126,15 @@ class Sentence:
 class KnowledgeBase:
     def __init__(self, sentences, queries):
         self.sentences = []
-        self.queries = queries
+        self.queries = []
         self.kb_map = {}
 
-        self.create_sentences(sentences)
+        self.tell(sentences)
+
+        self.ask(queries)
         self.dump_kb()
 
-    def create_sentences(self, sentences):
+    def tell(self, sentences):
 
         for sentence_str in sentences:
             sentence_obj = Sentence(sentence_str)
@@ -149,6 +152,45 @@ class KnowledgeBase:
         print(f"Queries : {self.queries}")
         print("-------------------------------------------------")
 
+    def ask(self, queries):
+
+        for query in queries:
+            query_obj = Sentence(query)
+            self.queries.append(query_obj)
+
+            self.resolve_query(query_obj)
+
+    def resolve_query(self, query_obj):
+        pass
+
+    def unify(self, s1, s2, theta):
+
+        if 'failure' in theta:
+            return theta
+
+        if s1 == s2:
+            return theta
+        elif is_variable(s_1):
+            return self.unify_var(s_1, s_2, theta)
+        elif is_variable(s_2):
+            return self.unify_var(s_2, s_1, theta)
+        elif isinstance(s_1, Predicate) and isinstance(s_2, Predicate):
+            return self.unify(s_1.args, s_2.args, self.unify(s_1.name, s_2.name, theta))
+        elif isinstance(s_1, list) and isinstance(s_2, list):
+            return self.unify(s_1[1:], s_2[1:], self.unify(s_1[0], s_2[0], theta))
+        else:
+            theta['failure'] = 1
+            return theta
+
+    def unify_var(self, var_1, s_2, theta):
+
+        if var_1 in theta:
+            return self.unify(theta[var_1], s_2, theta)
+        elif s_2 in theta:
+            return self.unify(var_1, theta[s_2], theta)
+        else:
+            theta[var_1] = s_2
+            return theta
 
 if __name__ == "__main__":
     in_list = None
