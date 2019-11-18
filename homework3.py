@@ -56,7 +56,7 @@ class Predicate:
 
 class Sentence:
 
-    def __init__(self, sentence_str):
+    def __init__(self, sentence_str = None):
         self.predicates = []
         self.premise = []
         self.conclusion = []
@@ -64,13 +64,14 @@ class Sentence:
         self.new_vars = []
         self.is_implication = False
 
-        self.create_predicates(sentence_str)
+        if sentence_str:
+            self.create_predicates(sentence_str)
 
-        self.convert_to_cnf()
-        self.extract_variables()
+            self.convert_to_cnf()
+            self.extract_variables()
 
 
-        self.dump_sentences()
+            self.dump_sentences()
 
     def dump_sentences(self):
 
@@ -164,42 +165,61 @@ class KnowledgeBase:
             self.queries.append(query_obj)
             print(f"Querying : {query}")
 
-            query_result.append(self.resolve_query(query_obj, idx))
-            print(f"Query result : {query_result[-1]}")
+            idx = 1
+            path = []
+            ~query_obj.predicates[0]
+            query_obj.dump_sentences()
+            self.newclauses.append(query_obj)
+            #query_result.append(self.resolve_query(~query_obj.predicates[0], idx))
+            query_result.append(self.resolve_query(query_obj, path, idx))
+            print(f"Query result : {query_result}")
         return query_result
 
-    def resolve_query(self, query_obj, idx):
+    def resolve_query(self, query_obj, path, idx):
         result = False
 
-        query_predicate = ~query_obj.predicates[0]
-
-        if not query_predicate:
-            return False
-
-        self.newclauses.append(query_predicate)
+        #if not query_predicate:
+            #return False
 
         resolution_sentences = []
 
-        if query_predicate.is_negation:
-            query_name = query_predicate.name
+        if idx > 0:
+            path_len = len(path[:idx-1])
+            if path_len > 0:
+                for i in range(path_len - 1):
+                    if path[path_len - 1] == path[i] or path[path_len - 1] == self.newclauses[0]:
+                        return False
+
+        if query_obj.predicates[0].is_negation:
+            query_name = query_obj.predicates[0].name
         else:
-            query_name = "~" + query_predicate.name
+            query_name = "~" + query_obj.predicates[0].name
 
         if query_name in self.kb_map:
             resolution_sentences = self.kb_map[query_name]
 
+        if idx > 1:
+            resolution_sentences += self.newclauses[:idx]
+        print(f"Path : {path}")
+        #print(f"Resolution sentences : {resolution_sentences}")
         for s in resolution_sentences:
+            #resolved = self.resolve(query_predicate, s)
             resolved = self.resolve(query_obj, s)
 
             if not resolved:
                 continue
 
             if len(self.newclauses) >= idx + 1:
-                    self.newclauses[index] = resolved[0]
+                self.newclauses[idx] = resolved[0]
             else:
                 self.newclauses.append(resolved[0])
 
-            result = self.resolve_query(resolved[0], idx + 1)
+            if len(path) > idx:
+                path[idx] = resolved[0]
+            else:
+                path.append(resolved[0])
+
+            result = self.resolve_query(resolved[0], path, idx + 1)
             if result == True:
                 return True
 
@@ -216,16 +236,20 @@ class KnowledgeBase:
         else:
             query_name = "~" + query_predicate.name
 
-        for predicate in s2.predicates:
-            theta = {}
-            self.unify(query_predicate, predicate, theta)
-            if 'failure' not in theta:
-                print(f"Theta : {theta}")
+        for pred_i in s1.predicates:
+            #pred_i = ~pred_i
+            for pred_j in s2.predicates:
+                theta = {}
+                self.unify(pred_i, pred_j, theta)
+                if 'failure' not in theta:
+                    print(f"Theta : {theta}")
 
-                new_predicate = self.duplicate_predicate(predicate, s2.predicates[:])
-                self.substitute(new_predicate, theta)
-                self.substitute(query_predicate, theta)
-                new_sentence.extend([new_predicate, query_predicate])
+                    new_pred_i = self.duplicate_predicate(pred_i, s1.predicates[:])
+                    new_pred_j = self.duplicate_predicate(pred_j, s2.predicates[:])
+                    self.substitute(new_pred_i, theta)
+                    self.substitute(new_pred_j, theta)
+                    print(f"Pred_i : {new_pred_i.dump_predicate()}\nPred_j : {new_pred_j.dump_predicate()}")
+                    new_sentence.append(self.create_sentence(new_pred_i, new_pred_j))
 
         return new_sentence
 
@@ -268,6 +292,19 @@ class KnowledgeBase:
         else:
             theta[var_1] = s_2
             return theta
+
+    def create_sentence(self, pred_i, pred_j):
+
+        sentence_obj = Sentence()
+
+        #for predicate in pred_i:
+        sentence_obj.predicates.append(pred_i)
+        #for predicate in pred_j:
+        sentence_obj.predicates.append(pred_j)
+
+        print(f"New Sentence")
+        sentence_obj.dump_sentences()
+        return sentence_obj
 
 if __name__ == "__main__":
     in_list = None
