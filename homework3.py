@@ -1,4 +1,4 @@
-
+import copy
 
 IMPLICATION = "=>"
 CONJUNCTION = "&"
@@ -38,6 +38,7 @@ class Predicate:
 
     def __invert__(self):
         self.is_negation = not self.is_negation
+        return self
 
     def parse_literal(self, literal):
 
@@ -128,6 +129,7 @@ class KnowledgeBase:
         self.sentences = []
         self.queries = []
         self.kb_map = {}
+        self.newclauses = []
 
         self.tell(sentences)
 
@@ -144,7 +146,10 @@ class KnowledgeBase:
                     if sentence_obj not in self.kb_map[predicate.name]:
                         self.kb_map[predicate.name].append(sentence_obj)
                 else:
-                    self.kb_map[predicate.name] = [sentence_obj]
+                    if predicate.is_negation:
+                        self.kb_map["~" + predicate.name] = [sentence_obj]
+                    else:
+                        self.kb_map[predicate.name] = [sentence_obj]
 
     def dump_kb(self):
         print("----------------Knowledge Base-------------------")
@@ -153,15 +158,87 @@ class KnowledgeBase:
         print("-------------------------------------------------")
 
     def ask(self, queries):
-
+        query_result = []
         for query in queries:
             query_obj = Sentence(query)
             self.queries.append(query_obj)
+            print(f"Querying : {query}")
 
-            self.resolve_query(query_obj)
+            query_result.append(self.resolve_query(query_obj, idx))
+            print(f"Query result : {query_result[-1]}")
+        return query_result
 
-    def resolve_query(self, query_obj):
-        pass
+    def resolve_query(self, query_obj, idx):
+        result = False
+
+        query_predicate = ~query_obj.predicates[0]
+
+        if not query_predicate:
+            return False
+
+        self.newclauses.append(query_predicate)
+
+        resolution_sentences = []
+
+        if query_predicate.is_negation:
+            query_name = query_predicate.name
+        else:
+            query_name = "~" + query_predicate.name
+
+        if query_name in self.kb_map:
+            resolution_sentences = self.kb_map[query_name]
+
+        for s in resolution_sentences:
+            resolved = self.resolve(query_obj, s)
+
+            if not resolved:
+                continue
+
+            if len(self.newclauses) >= idx + 1:
+                    self.newclauses[index] = resolved[0]
+            else:
+                self.newclauses.append(resolved[0])
+
+            result = self.resolve_query(resolved[0], idx + 1)
+            if result == True:
+                return True
+
+        if result == False:
+            return False
+
+
+    def resolve(self, s1, s2):
+        new_sentence = []
+        query_predicate = s1.predicates[0]
+
+        if query_predicate.is_negation:
+            query_name = query_predicate.name
+        else:
+            query_name = "~" + query_predicate.name
+
+        for predicate in s2.predicates:
+            theta = {}
+            self.unify(query_predicate, predicate, theta)
+            if 'failure' not in theta:
+                print(f"Theta : {theta}")
+
+                new_predicate = self.duplicate_predicate(predicate, s2.predicates[:])
+                self.substitute(new_predicate, theta)
+                self.substitute(query_predicate, theta)
+                new_sentence.extend([new_predicate, query_predicate])
+
+        return new_sentence
+
+    def duplicate_predicate(self, predicate, predicate_list):
+            if isinstance(predicate, Predicate):
+                new_predicate_list = copy.deepcopy(predicate_list)
+                return list(filter(lambda a: a != predicate, new_predicate_list))[0]
+
+    def substitute(self, predicate, theta):
+        print(f"New predicate : {predicate}")
+        for i in range(len(predicate.args)):
+            if predicate.args[i] in theta:
+                predicate.args[i] = theta[predicate.args[i]]
 
     def unify(self, s1, s2, theta):
 
@@ -170,14 +247,14 @@ class KnowledgeBase:
 
         if s1 == s2:
             return theta
-        elif is_variable(s_1):
-            return self.unify_var(s_1, s_2, theta)
-        elif is_variable(s_2):
-            return self.unify_var(s_2, s_1, theta)
-        elif isinstance(s_1, Predicate) and isinstance(s_2, Predicate):
-            return self.unify(s_1.args, s_2.args, self.unify(s_1.name, s_2.name, theta))
-        elif isinstance(s_1, list) and isinstance(s_2, list):
-            return self.unify(s_1[1:], s_2[1:], self.unify(s_1[0], s_2[0], theta))
+        elif is_variable(s1):
+            return self.unify_var(s1, s2, theta)
+        elif is_variable(s2):
+            return self.unify_var(s2, s1, theta)
+        elif isinstance(s1, Predicate) and isinstance(s2, Predicate):
+            return self.unify(s1.args, s2.args, self.unify(s1.name, s2.name, theta))
+        elif isinstance(s1, list) and isinstance(s2, list):
+            return self.unify(s1[1:], s2[1:], self.unify(s1[0], s2[0], theta))
         else:
             theta['failure'] = 1
             return theta
