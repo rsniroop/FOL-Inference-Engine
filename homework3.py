@@ -178,36 +178,44 @@ class KnowledgeBase:
     def resolve_query(self, query_obj, path, idx):
         result = False
 
-        #if not query_predicate:
-            #return False
+        if not query_obj or not query_obj.predicates:
+            return True
 
         resolution_sentences = []
 
-        if idx > 0:
+        """if idx > 0:
             path_len = len(path[:idx-1])
             if path_len > 0:
                 for i in range(path_len - 1):
                     if path[path_len - 1] == path[i] or path[path_len - 1] == self.newclauses[0]:
-                        return False
+                        return False"""
 
-        if query_obj.predicates[0].is_negation:
-            query_name = query_obj.predicates[0].name
-        else:
-            query_name = "~" + query_obj.predicates[0].name
+        for i in range(len(query_obj.predicates)):
+            if query_obj.predicates[i].is_negation:
+                query_name = query_obj.predicates[i].name
+            else:
+                query_name = "~" + query_obj.predicates[i].name
 
-        if query_name in self.kb_map:
-            resolution_sentences = self.kb_map[query_name]
+            if query_name in self.kb_map:
+                resolution_sentences += self.kb_map[query_name]
 
-        if idx > 1:
-            resolution_sentences += self.newclauses[:idx]
-        print(f"Path : {path}")
-        #print(f"Resolution sentences : {resolution_sentences}")
+        #if idx > 1:
+        resolution_sentences += self.newclauses[:idx]
+        #print(f"Path : {path}")
+        print(f"\nResolution sentences : {resolution_sentences}")
+        print(f"Len of RS : {len(resolution_sentences)}")
         for s in resolution_sentences:
             #resolved = self.resolve(query_predicate, s)
             resolved = self.resolve(query_obj, s)
 
             if not resolved:
+                print(f"Not Resolved\n")
                 continue
+
+            print(f"\nResolved Sentences\n")
+            print("=================================================")
+            print(f"{resolved[0].dump_sentences()}")
+            print("=================================================\n")
 
             if len(self.newclauses) >= idx + 1:
                 self.newclauses[idx] = resolved[0]
@@ -229,40 +237,50 @@ class KnowledgeBase:
 
     def resolve(self, s1, s2):
         new_sentence = []
-        query_predicate = s1.predicates[0]
-
-        if query_predicate.is_negation:
-            query_name = query_predicate.name
-        else:
-            query_name = "~" + query_predicate.name
 
         for pred_i in s1.predicates:
             #pred_i = ~pred_i
             for pred_j in s2.predicates:
-                theta = {}
-                self.unify(pred_i, pred_j, theta)
-                if 'failure' not in theta:
-                    print(f"Theta : {theta}")
+                if self.is_valid_pair(pred_i, pred_j):
+                    theta = {}
+                    self.unify(pred_i, pred_j, theta)
+                    if ('failure' not in theta):
+                        print(f"Theta : {theta}")
 
-                    new_pred_i = self.duplicate_predicate(pred_i, s1.predicates[:])
-                    new_pred_j = self.duplicate_predicate(pred_j, s2.predicates[:])
-                    self.substitute(new_pred_i, theta)
-                    self.substitute(new_pred_j, theta)
-                    print(f"Pred_i : {new_pred_i.dump_predicate()}\nPred_j : {new_pred_j.dump_predicate()}")
-                    new_sentence.append(self.create_sentence(new_pred_i, new_pred_j))
+                        new_pred_i = self.duplicate_predicate(pred_i, s1.predicates[:])
+                        print(f"S1 : New predicates : {[x.dump_predicate() for x in new_pred_i]}")
+                        new_pred_j = self.duplicate_predicate(pred_j, s2.predicates[:])
+                        print(f"S2 : New predicates : {[x.dump_predicate() for x in new_pred_j]}")
+                        self.substitute(new_pred_i, theta)
+                        self.substitute(new_pred_j, theta)
+                        #print(f"Pred_i : {new_pred_i.dump_predicate()}\nPred_j : {new_pred_j.dump_predicate()}")
+                        new_sentence.append(self.create_sentence(new_pred_i, new_pred_j))
 
         return new_sentence
+
+    def is_valid_pair(self, pred_i, pred_j):
+
+        if pred_i.name != pred_j.name:
+            return False
+
+        if pred_i.is_negation == pred_j.is_negation:
+            return False
+
+        return True
 
     def duplicate_predicate(self, predicate, predicate_list):
             if isinstance(predicate, Predicate):
                 new_predicate_list = copy.deepcopy(predicate_list)
-                return list(filter(lambda a: a != predicate, new_predicate_list))[0]
+                print(f"New predicate list : {new_predicate_list}")
+                return [ x for x in predicate_list if x!= predicate]
+                #return list(filter(lambda a: a != predicate, new_predicate_list))[0]
 
-    def substitute(self, predicate, theta):
-        print(f"New predicate : {predicate}")
-        for i in range(len(predicate.args)):
-            if predicate.args[i] in theta:
-                predicate.args[i] = theta[predicate.args[i]]
+    def substitute(self, predicate_list, theta):
+
+        for predicate in predicate_list:
+            for i in range(len(predicate.args)):
+                if predicate.args[i] in theta:
+                    predicate.args[i] = theta[predicate.args[i]]
 
     def unify(self, s1, s2, theta):
 
@@ -297,10 +315,12 @@ class KnowledgeBase:
 
         sentence_obj = Sentence()
 
-        #for predicate in pred_i:
-        sentence_obj.predicates.append(pred_i)
-        #for predicate in pred_j:
-        sentence_obj.predicates.append(pred_j)
+        for predicate in pred_i:
+            if predicate is not None:
+                sentence_obj.predicates.append(predicate)
+        for predicate in pred_j:
+            if predicate is not None:
+                sentence_obj.predicates.append(predicate)
 
         print(f"New Sentence")
         sentence_obj.dump_sentences()
