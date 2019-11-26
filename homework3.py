@@ -1,16 +1,28 @@
 import copy
+import time
 
 IMPLICATION = "=>"
 CONJUNCTION = "&"
 NEGATION = "~"
 
 count = 0
+start_time = 0
 
 def is_variable(arg):
+    """
+    " Check if argument is a variable
+    " @params arg  string
+    " @return Boolean
+    """
 
     return isinstance(arg, str) and arg[:1].isalpha() and arg[:1].islower()
 
 def standardize_variable():
+    """
+    " Standardize Variable
+    " @params None
+    " @return string
+    """
 
     global count
     count += 1
@@ -37,12 +49,20 @@ class Predicate:
         if self.args != other.args:
             return True
 
+        if (self.is_negation != other.is_negation):
+            return True
+
         return False
 
     def __eq__(self, other):
         return not self.__ne__(other)
 
     def parse_literal(self, literal):
+        """
+        " Parse Literal
+        " @params literal string
+        " @return None
+        """
 
         if NEGATION in literal:
             self.is_negation = True
@@ -57,6 +77,11 @@ class Predicate:
             self.args[idx] = self.args[idx].strip()
 
     def dump_predicate(self):
+        """
+        " Dump predicate properties
+        " @params None
+        " @return None
+        """
         print(f"\nPredicate : {self.name}")
         print(f"is_neg : {self.is_negation}")
         print(f"args : {self.args}")
@@ -77,7 +102,6 @@ class Sentence:
             self.convert_to_cnf()
             self.extract_variables()
 
-            self.dump_sentences()
 
     def __eq__(self, other):
 
@@ -111,11 +135,21 @@ class Sentence:
         return False
 
     def dump_sentences(self):
+        """
+        " Dump sentences
+        " @params None
+        " @return None
+        """
 
         for pred in self.predicates:
             pred.dump_predicate()
 
     def convert_to_cnf(self):
+        """
+        " Convert sentences to CNF
+        " @params None
+        " @return None
+        """
 
         # Eliminate Implication
         if self.is_implication:
@@ -123,13 +157,17 @@ class Sentence:
                 ~self.predicates[idx]
 
     def extract_variables(self):
+        """
+        " Extract and standardize variables
+        " @params None
+        " @return None
+        """
 
         self.var_map = {}
 
         for idx in range(len(self.predicates)):
 
             for arg_id, arg in enumerate(self.predicates[idx].args):
-                #print(f"Arg : {arg}")
                 if is_variable(arg):
                     if arg in self.var_map:
                         self.predicates[idx].args[arg_id] = self.var_map[arg]
@@ -141,6 +179,11 @@ class Sentence:
 
         
     def create_predicates(self, sentence_str):
+        """
+        " Create Predicates
+        " @params sentence_str string
+        " @return None
+        """
 
         if IMPLICATION in sentence_str:
             self.premise, self.conclusion = sentence_str.split(IMPLICATION)
@@ -150,7 +193,6 @@ class Sentence:
 
         for literal in self.premise.split(CONJUNCTION) + [self.conclusion]:
             if literal:
-                #print(f"Literal  : {literal}")
                 predicate_obj = Predicate(literal.strip())          
                 self.predicates.append(predicate_obj)
 
@@ -161,14 +203,20 @@ class KnowledgeBase:
         self.queries = []
         self.kb_map = {}
         self.newclauses = []
+        self.query_result = []
+
+        self.timed_out = False
 
         self.tell(sentences)
 
-        self.dump_kb()
         self.ask(queries)
 
     def tell(self, sentences):
-
+        """
+        " Tell KB
+        " @params sentences List
+        " @return None
+        """
         for sentence_str in sentences:
             sentence_obj = Sentence(sentence_str)
             self.sentences.append(sentence_obj)
@@ -183,31 +231,65 @@ class KnowledgeBase:
                         self.kb_map[predicate.name] = [sentence_obj]
 
     def dump_kb(self):
+        """
+        " Dump KB
+        " @params None
+        " @return None
+        """
         print("----------------Knowledge Base-------------------")
         print(f"KB : {self.kb_map}")
         print(f"Queries : {self.queries}")
         print("-------------------------------------------------")
 
     def ask(self, queries):
-        query_result = []
+        """
+        " Ask KB
+        " @params queries List
+        " @return None
+        """
+        self.query_result = []
         for query in queries:
             self.newclauses = []
             query_obj = Sentence(query)
             self.queries.append(query_obj)
-            print(f"Querying : {query}")
 
+            global start_time
+            start_time = time.time()
             idx = 1
             path = []
             ~query_obj.predicates[0]
-            query_obj.dump_sentences()
             self.newclauses.append(query_obj)
-            #query_result.append(self.resolve_query(~query_obj.predicates[0], idx))
-            query_result.append(self.resolve_query(query_obj, path, idx))
-            print(f"Query result : {query_result}")
-        return query_result
+            indi_result = False
+            try:
+                indi_result = self.resolve_query(query_obj, path, idx)
+            except:
+                indi_result = False
+            #self.query_result.append(self.resolve_query(query_obj, path, idx)) 
+            self.query_result.append(indi_result)
+
+    def is_timed_out(self):
+        """
+        " Check if resolution is timed out
+        " @params None
+        " @return None
+        """
+        if time.time() - start_time > 55:
+            self.timed_out = True
+            return True
+        return False
 
     def resolve_query(self, query_obj, path, idx):
+        """
+        " Resolve Query
+        " @params query_obj Sentence
+        "         path      List
+        "         idx       Int
+        " @return Boolean
+        """
         result = False
+
+        if self.timed_out or self.is_timed_out():
+            return False
 
         if not query_obj or not query_obj.predicates:
             return True
@@ -219,7 +301,6 @@ class KnowledgeBase:
             if path_len > 0:
                 for i in range(path_len - 1):
                     if path[path_len - 1] == path[i] or path[path_len - 1] == self.newclauses[0]:
-                        print(f"Infinite Loop detected")
                         return False
 
         for i in range(len(query_obj.predicates)):
@@ -233,31 +314,14 @@ class KnowledgeBase:
 
         if idx > 1:
             resolution_sentences += self.newclauses[:idx]
-        #print(f"Path : {path}")
-        print(f"\nResolution sentences : {resolution_sentences}")
-        print(f"Len of RS : {len(resolution_sentences)}")
         for s in resolution_sentences:
-            #resolved = self.resolve(query_predicate, s)
             resolved = self.resolve(query_obj, s)
 
             if not resolved:
-                print(f"Not Resolved\n")
                 continue
 
-            print(f"\nResolved Sentences\n")
-            print("=================================================")
-            print(f"{resolved[0].dump_sentences()}")
-            print("=================================================\n")
-
-            if len(self.newclauses) >= idx + 1:
-                self.newclauses[idx] = resolved[0]
-            else:
-                self.newclauses.append(resolved[0])
-
-            if len(path) > idx:
-                path[idx] = resolved[0]
-            else:
-                path.append(resolved[0])
+            self.newclauses.append(resolved[0])
+            path.append(resolved[0])
 
             result = self.resolve_query(resolved[0], path, idx + 1)
             if result == True:
@@ -268,31 +332,36 @@ class KnowledgeBase:
 
 
     def resolve(self, s1, s2):
+        """
+        " Resolve two sentences
+        " @params s1 Sentence
+        "         s2 Sentence
+        " @return resolved sentence
+        """
         new_sentence = []
 
         for pred_i in s1.predicates:
-            #pred_i = ~pred_i
             for pred_j in s2.predicates:
                 if self.is_valid_pair(pred_i, pred_j):
-                #if (pred_i.name == pred_j.name) and (not (pred_i.is_negation == pred_j.is_negation)):
                     theta = {}
                     self.unify(pred_i, pred_j, theta)
                     if ('failure' not in theta):
-                        print(f"Theta : {theta}")
 
                         new_pred_i = self.duplicate_predicate(pred_i, s1.predicates[:])
-                        print(f"S1 : New predicates : {[x.dump_predicate() for x in new_pred_i]}")
                         new_pred_j = self.duplicate_predicate(pred_j, s2.predicates[:])
-                        print(f"S2 : New predicates : {[x.dump_predicate() for x in new_pred_j]}")
                         self.substitute(new_pred_i, theta)
                         self.substitute(new_pred_j, theta)
-                        #print(f"Pred_i : {new_pred_i.dump_predicate()}\nPred_j : {new_pred_j.dump_predicate()}")
                         new_sentence.append(self.create_sentence(new_pred_i, new_pred_j))
 
         return new_sentence
 
     def is_valid_pair(self, pred_i, pred_j):
-
+        """
+        " Check if two predicates are vaild pair
+        " @params pred_i Predicate
+        "         pred_j Predicate
+        " @return Boolean
+        """
         if pred_i.name != pred_j.name:
             return False
 
@@ -302,19 +371,36 @@ class KnowledgeBase:
         return True
 
     def duplicate_predicate(self, predicate, predicate_list):
+        """
+        " Duplicate Predicate
+        " @params predicate      Predicate
+        "         predicate_list List
+        " @return None
+        """
         if isinstance(predicate, Predicate):
             new_predicate_list = copy.deepcopy(predicate_list)
-            print(f"New predicate list : {new_predicate_list}")
             return [ x for x in new_predicate_list if x != predicate]
 
     def substitute(self, predicate_list, theta):
-
+        """
+        " Substitute
+        " @params predicate_list List
+        "         theta          Dict
+        " @return None
+        """
         for predicate in predicate_list:
             for i in range(len(predicate.args)):
                 if predicate.args[i] in theta:
                     predicate.args[i] = theta[predicate.args[i]]
 
     def unify(self, s1, s2, theta):
+        """
+        " Unify Two sentences
+        " @params s1    Sentence
+        "         s2    Sentence
+        :         theta Dict
+        " @return None
+        """
 
         if 'failure' in theta:
             return theta
@@ -333,18 +419,31 @@ class KnowledgeBase:
             theta['failure'] = 1
             return theta
 
-    def unify_var(self, var_1, s_2, theta):
+    def unify_var(self, x, y, theta):
+        """
+        " Unify variables
+        " @params x     string
+        "         y     string
+        "         theta Dict
+        " @return None
+        """
 
-        if var_1 in theta:
-            return self.unify(theta[var_1], s_2, theta)
-        elif s_2 in theta:
-            return self.unify(var_1, theta[s_2], theta)
+        if x in theta:
+            return self.unify(theta[x], y, theta)
+        elif y in theta:
+            return self.unify(x, theta[y], theta)
         else:
-            if not is_variable(s_2):
-                theta[var_1] = s_2
+            if not is_variable(y):
+                theta[x] = y
             return theta
 
     def create_sentence(self, pred_i, pred_j):
+        """
+        " Create Sentence
+        " @params pred_i Predicate
+        "         pred_j Predicate
+        " @return None
+        """
 
         sentence_obj = Sentence()
 
@@ -355,8 +454,6 @@ class KnowledgeBase:
             if (predicate is not None) and not (predicate in sentence_obj):
                 sentence_obj.predicates.append(predicate)
 
-        print(f"New Sentence")
-        sentence_obj.dump_sentences()
         return sentence_obj
 
 if __name__ == "__main__":
@@ -375,5 +472,10 @@ if __name__ == "__main__":
         for i in range(n_sentences):
             sentences.append(in_list[idx].strip("\n"))
             idx += 1
-                        
-    KnowledgeBase(sentences, queries)
+    in_file.close()
+                 
+    my_KB = KnowledgeBase(sentences, queries)
+
+    with open("output.txt", "w+") as out_file :
+        out_file.write("\n".join(list(map(str.upper, list(map(str, my_KB.query_result))))))
+    out_file.close()
