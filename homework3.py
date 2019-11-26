@@ -221,14 +221,16 @@ class KnowledgeBase:
             sentence_obj = Sentence(sentence_str)
             self.sentences.append(sentence_obj)
             for predicate in sentence_obj.predicates:
-                if predicate.name in self.kb_map:
-                    if sentence_obj not in self.kb_map[predicate.name]:
-                        self.kb_map[predicate.name].append(sentence_obj)
+                pred_name = ""
+                if predicate.is_negation:
+                    pred_name = "~" + predicate.name
                 else:
-                    if predicate.is_negation:
-                        self.kb_map["~" + predicate.name] = [sentence_obj]
-                    else:
-                        self.kb_map[predicate.name] = [sentence_obj]
+                    pred_name = predicate.name
+                if pred_name in self.kb_map:
+                    if sentence_obj not in self.kb_map[pred_name]:
+                        self.kb_map[pred_name].append(sentence_obj)
+                else:
+                    self.kb_map[pred_name] = [sentence_obj]
 
     def dump_kb(self):
         """
@@ -273,7 +275,7 @@ class KnowledgeBase:
         " @params None
         " @return None
         """
-        if time.time() - start_time > 55:
+        if time.time() - start_time > 45:
             self.timed_out = True
             return True
         return False
@@ -287,7 +289,6 @@ class KnowledgeBase:
         " @return Boolean
         """
         result = False
-
         if self.timed_out or self.is_timed_out():
             return False
 
@@ -320,8 +321,15 @@ class KnowledgeBase:
             if not resolved:
                 continue
 
-            self.newclauses.append(resolved[0])
-            path.append(resolved[0])
+            if len(self.newclauses) >= idx + 1:
+                self.newclauses[idx] = resolved[0]
+            else:
+                self.newclauses.append(resolved[0])
+
+            if len(path) > idx:
+                path[idx] = resolved[0]
+            else:
+                path.append(resolved[0])
 
             result = self.resolve_query(resolved[0], path, idx + 1)
             if result == True:
@@ -346,7 +354,6 @@ class KnowledgeBase:
                     theta = {}
                     self.unify(pred_i, pred_j, theta)
                     if ('failure' not in theta):
-
                         new_pred_i = self.duplicate_predicate(pred_i, s1.predicates[:])
                         new_pred_j = self.duplicate_predicate(pred_j, s2.predicates[:])
                         self.substitute(new_pred_i, theta)
